@@ -3,7 +3,7 @@ import threading
 from scapy.all import *
 from dissectors.can import CAN
 
-frames_buffer = []
+frames_buffer = {}
 
 def run_sniffer():
     """
@@ -19,33 +19,29 @@ def process_packet(pkt: Packet):
     """
     can_frame = CAN(raw(pkt))
     can_frame.time = pkt.time
+    can_id = can_frame.can_id
 
-    if len(frames_buffer) == 0:
+    if can_id not in list(frames_buffer.keys()):
+        frames_buffer[can_id] = []
         if pkt.sniffed_on == 'vcan0':
-            frames_buffer.append(can_frame)
+            frames_buffer[can_id].append(can_frame)
         else:
             pass
     else:
         # resolve duplicates in case of lo iface
-        if can_frame not in frames_buffer:
-            frames_buffer.append(can_frame)
+        if pkt.sniffed_on == 'vcan1':
+            frames_buffer[can_id].append(can_frame)
+            if len(frames_buffer[can_id]) == 3:
+                frames_buffer[can_id].pop(1)
+                process_txn(frames_buffer[can_id])
 
-        if pkt.sniffed_on == 'vcan1' and can_frame in frames_buffer:
-            frames_buffer.remove(can_frame)
-            frames_buffer.append(can_frame)
-            process_txn()
-
-def process_txn():
+def process_txn(txn):
     """
-    Finds the transaction latency from the frame buffer. 
+    Finds the transmission latency of the CAN frame. 
     """
-    recv = frames_buffer[-1]
-    for frame in frames_buffer[:-1][::-1]:
-        if frame.can_id == recv.can_id:
-            print(f'latency: {(recv.time - frame.time)*1e3} ms')
-            frames_buffer.remove(frame)
-            frames_buffer.pop(-1)
-            break
+    sent = txn[0]
+    recv = txn[-1]
+    print(f'latency: {(recv.time - sent.time)*1e3} ms')
     
 if __name__ == '__main__':
     try:
