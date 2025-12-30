@@ -2,6 +2,8 @@ import sys
 import threading
 from scapy.all import *
 from dissectors.can import CAN
+from dissectors.acf_common import NTSCF
+from dissectors.acf_can import ACF_CAN
 
 frames_buffer = {}
 
@@ -10,34 +12,39 @@ def run_sniffer():
     Initializes a async scapy sniffer for vcan ifaces. 
     """
     print('Initializing scapy sniffer..')
-    sniffer = AsyncSniffer(iface=['vcan0', 'vcan1'], prn=lambda x: process_packet(x))
+    sniffer = AsyncSniffer(iface=['vcan0', 'lo', 'vcan1'], prn=lambda x: process_packet(x))
     sniffer.start()
 
 def process_packet(pkt: Packet):
     """
     Dissects the CAN frame and adds it to the frame buffer. 
     """
-    can_frame = CAN(raw(pkt))
-    can_frame.time = pkt.time
-    can_id = can_frame.can_id
+    if pkt.sniffed_on in ['vcan0', 'vcan1']:
+        can_frame = CAN(raw(pkt))
+        can_frame.time = pkt.time
+        can_id = can_frame.can_id
 
-    if can_id not in list(frames_buffer.keys()):
-        frames_buffer[can_id] = []
-        if pkt.sniffed_on == 'vcan0':
-            frames_buffer[can_id].append(can_frame)
+        if can_id not in list(frames_buffer.keys()):
+            frames_buffer[can_id] = []
+            if pkt.sniffed_on == 'vcan0':
+                frames_buffer[can_id].append(can_frame)
+            else:
+                pass
         else:
-            pass
-    else:
-        # resolve duplicates in case of lo iface
-        if pkt.sniffed_on == 'vcan1':
-            frames_buffer[can_id].append(can_frame)
-            if len(frames_buffer[can_id]) == 3:
-                frames_buffer[can_id].pop(1)
-                process_txn(frames_buffer[can_id])
+            # resolve duplicates in case of lo iface
+            if pkt.sniffed_on == 'vcan1':
+                frames_buffer[can_id].append(can_frame)
+                if len(frames_buffer[can_id]) == 3:
+                    frames_buffer[can_id].pop(1)
+                    get_latency(frames_buffer[can_id])
+    
+    elif pkt.sniffed_on == 'lo':
+        if NTSCF in pkt:
+            print(pkt.show2())
 
-def process_txn(txn):
+def get_latency(txn):
     """
-    Finds the transmission latency of the CAN frame. 
+    Finds the transmission latency of the tunneled CAN frame. 
     """
     sent = txn[0]
     recv = txn[-1]

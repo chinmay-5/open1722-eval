@@ -2,7 +2,7 @@ from scapy.all import *
 
 # define a custom packet dissector for CAN
 class CAN(Packet):
-    name = "CAN "
+    name = "CAN"
     fields_desc=[
         BitField("can_id", 0, 29),
         BitField("extended", 0, 1),
