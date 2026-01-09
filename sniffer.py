@@ -1,9 +1,13 @@
 import sys
 import threading
+
 from scapy.all import *
+
 from dissectors.can import CAN
 from dissectors.acf_common import NTSCF
 from dissectors.acf_can import ACF_CAN
+
+from pub_server import setup_socket, publish_message
 
 frames_buffer = {}
 
@@ -36,23 +40,28 @@ def process_packet(pkt: Packet):
                 frames_buffer[can_id].append(can_frame)
                 if len(frames_buffer[can_id]) == 3:
                     frames_buffer[can_id].pop(1)
-                    get_latency(frames_buffer[can_id])
+                    get_latency(frames_buffer[can_id], can_id)
     
     elif pkt.sniffed_on == 'lo':
         if NTSCF in pkt:
-            print(pkt.show2())
+            # print(pkt.show2())
+            pass
 
-def get_latency(txn):
+def get_latency(txn, can_id):
     """
     Finds the transmission latency of the tunneled CAN frame. 
     """
     sent = txn[0]
     recv = txn[-1]
-    print(f'latency: {(recv.time - sent.time)*1e3} ms')
+    latency = (recv.time - sent.time)*1e3
+    print(f'latency: {latency} ms')
+    publish_message(zmq_socket, 'latency', latency, can_id)
     
 if __name__ == '__main__':
     try:
         if 'vcan0' and 'vcan1' in scapy.interfaces.get_if_list():
+            zmq_socket = setup_socket()
+
             sniffer_thread = threading.Thread(target=run_sniffer)
             sniffer_thread.start()
             while True:
