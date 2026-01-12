@@ -3,7 +3,8 @@ import zmq
 def setup_socket(port = 5556):
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
-    socket.bind(f"tcp://*:{port}")
+    # socket.bind(f"tcp://127.0.0.1:{port}")
+    socket.bind("ipc:///tmp/metrics.pub")
 
     return socket
 

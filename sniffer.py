@@ -9,7 +9,8 @@ from dissectors.acf_can import ACF_CAN
 
 from pub_server import setup_socket, publish_message
 
-frames_buffer = {}
+can_buffer = {}
+eth_buffer = []
 sniffer = None
 
 def run_sniffer():
@@ -24,7 +25,7 @@ def run_sniffer():
 
 def process_packet(pkt: Packet):
     """
-    Dissects the CAN frame and adds it to the frame buffer. 
+    Dissects the CAN / ETH frame and adds it to the frame buffer. 
     """
     if pkt.sniffed_on in ['vcan0', 'vcan1']:
         can_frame = CAN(raw(pkt))
@@ -32,23 +33,22 @@ def process_packet(pkt: Packet):
         can_id = can_frame.can_id
 
         if pkt.sniffed_on == 'vcan0':
-            if can_id not in list(frames_buffer.keys()):
-                frames_buffer[can_id] = [can_frame]
+            if can_id not in list(can_buffer.keys()):
+                can_buffer[can_id] = [can_frame]
             else:
                 pass
         else:
             # packets sniffed on vcan1
             # resolve duplicates in case of lo iface
-            frames_buffer[can_id].append(can_frame)
-            if len(frames_buffer[can_id]) == 3:
-                frames_buffer[can_id].pop(1)
-                get_latency(frames_buffer[can_id], can_id)
-                frames_buffer.pop(can_id)
+            can_buffer[can_id].append(can_frame)
+            if len(can_buffer[can_id]) == 3:
+                can_buffer[can_id].pop(1)
+                get_latency(can_buffer[can_id], can_id)
+                can_buffer.pop(can_id)
 
     elif pkt.sniffed_on == 'lo':
         if NTSCF in pkt:
-            # print(pkt.show2())
-            pass
+            get_efficiency(pkt)
 
 def get_latency(txn, can_id):
     """
@@ -61,6 +61,36 @@ def get_latency(txn, can_id):
     publish_message(zmq_socket, 'latency', latency, can_id)
 
     return latency
+
+def get_efficiency(pkt):
+    """
+    Calculates the frame efficiency of the tunneled CAN frame and publishes it. 
+    """
+    frame_efficiency = None
+    duplicate = False
+    payload_size = 0
+
+    for acf_msg in pkt.acf_tlv:
+        if acf_msg.can_id not in eth_buffer:
+            payload_size += (len(acf_msg.can_msg_payload) - acf_msg.pad)
+            # to avoid duplicates
+            eth_buffer.append(acf_msg.can_id)
+        else:
+            eth_buffer.remove(acf_msg.can_id)
+            duplicate = True
+
+    if not duplicate:
+        # min eth size is 64 bytes
+        # ETH -> 14
+        # NTSCF -> 12
+        # ACF-CAN -> 24
+        pkt_size = max(len(pkt), 64)
+        frame_efficiency = payload_size/pkt_size
+
+        print(f'efficiency: {frame_efficiency}')
+        publish_message(zmq_socket, 'efficiency', frame_efficiency)
+
+    return frame_efficiency
 
 if __name__ == '__main__':
     try:
