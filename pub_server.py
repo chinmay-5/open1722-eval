@@ -1,5 +1,6 @@
 import zmq
 
+
 def setup_socket(port=5556):
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
@@ -7,6 +8,7 @@ def setup_socket(port=5556):
     socket.bind("ipc:///tmp/metrics.pub")
 
     return socket
+
 
 def publish_message(socket, topic: int | str, message: int | str, key=None):
     payload = [str(topic), str(message)]

@@ -1,5 +1,6 @@
 from scapy.all import *
 
+
 # define a custom packet dissector for ACF CAN message
 class ACF_CAN(Packet):
     name = "ACF_CAN"

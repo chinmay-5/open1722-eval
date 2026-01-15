@@ -13,6 +13,7 @@ can_buffer = {}
 eth_buffer = []
 sniffer = None
 
+
 def run_sniffer():
     """
     Initializes a async scapy sniffer for vcan ifaces.
@@ -24,6 +25,7 @@ def run_sniffer():
         iface=["vcan0", "lo", "vcan1"], prn=lambda x: process_packet(x)
     )
     sniffer.start()
+
 
 def process_packet(pkt: Packet):
     """
@@ -52,6 +54,7 @@ def process_packet(pkt: Packet):
         if NTSCF in pkt:
             get_efficiency(pkt)
 
+
 def get_latency(txn, can_id):
     """
     Calculates the transmission latency of the tunneled CAN frame and publishes it.
@@ -63,6 +66,7 @@ def get_latency(txn, can_id):
     publish_message(zmq_socket, "latency", latency, can_id)
 
     return latency
+
 
 def get_efficiency(pkt):
     """

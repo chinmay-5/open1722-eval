@@ -1,5 +1,6 @@
 from scapy.all import *
 
+
 # define a custom packet dissector for CAN
 class CAN(Packet):
     name = "CAN"
