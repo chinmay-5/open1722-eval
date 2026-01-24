@@ -1,5 +1,7 @@
 import sys
 import threading
+import traceback
+import time
 
 from scapy.all import *
 
@@ -12,6 +14,7 @@ from pub_server import setup_socket, publish_message
 can_buffer = {}
 eth_buffer = []
 sniffer = None
+sniffer_ready = threading.Event()
 
 
 def run_sniffer():
@@ -20,11 +23,11 @@ def run_sniffer():
     """
     global sniffer
 
-    print("Initializing scapy sniffer..")
     sniffer = AsyncSniffer(
         iface=["vcan0", "lo", "vcan1"], prn=lambda x: process_packet(x)
     )
     sniffer.start()
+    sniffer_ready.set()
 
 
 def process_packet(pkt: Packet):
@@ -100,20 +103,25 @@ def get_efficiency(pkt):
 
 
 if __name__ == "__main__":
-    try:
-        if "vcan0" and "vcan1" in scapy.interfaces.get_if_list():
-            zmq_socket = setup_socket()
+    if "vcan0" and "vcan1" in scapy.interfaces.get_if_list():
+        zmq_socket = setup_socket()
 
-            sniffer_thread = threading.Thread(target=run_sniffer)
-            sniffer_thread.start()
-            while True:
-                pass
-        else:
-            print("Virtual can interface vcan0 and vcan1 not found. Exiting..")
-            sys.exit(0)
+        sniffer_thread = threading.Thread(target=run_sniffer)
+        sniffer_thread.start()
+
+        if not sniffer_ready.wait(timeout=2.0):
+            raise RuntimeError("Sniffer failed to start")
+
+        print("Sniffer running. Press Ctrl+C to stop.")
+    else:
+        raise OSError("Virtual can interface vcan0 and vcan1 not found. Exiting.")
+
+    try:
+        while True:
+            time.sleep(1)
     except Exception as e:
-        print(f"Error: {e}. Exiting..")
+        print(f"Exception occured: {traceback.format_exc()}")
     except KeyboardInterrupt:
-        print(f"Exiting..")
+        print(f"Exiting.")
         if sniffer:
             sniffer.stop()

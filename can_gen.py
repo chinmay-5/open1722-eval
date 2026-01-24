@@ -24,11 +24,11 @@ if __name__ == "__main__":
         bus = can.interface.Bus(channel="vcan0", interface="socketcan")
 
         while True:
-            for i in range(2):
+            for i in range(3):
                 send_periodic()
                 time.sleep(0.01)
 
-            time.sleep(1)
+            time.sleep(0.5)
 
             # send a burst can message at random
             # if random.random() < burst_prob:
